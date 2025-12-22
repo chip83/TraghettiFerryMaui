@@ -29,6 +29,9 @@ public static class MauiProgram
 
         // Views
         builder.Services.AddSingleton<MainPage>();
+        
+        // App registration
+        builder.Services.AddSingleton<App>();
 
 #if DEBUG
         builder.Logging.AddDebug();
