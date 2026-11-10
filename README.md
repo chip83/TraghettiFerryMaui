@@ -1,58 +1,71 @@
-# Traghetti Ferry MAUI
+# Traghetti La Maddalena ⇄ Palau
 
-Applicazione .NET MAUI per visualizzare gli orari dei traghetti Delcomar e Maddalena Lines tra Palau e La Maddalena.
+App Android nativa (Kotlin + Jetpack Compose) con gli orari dei traghetti **Delcomar** e
+**Maddalena Lines (Caronte & Tourist)** tra La Maddalena e Palau, e l'acquisto del biglietto
+sui siti ufficiali delle compagnie senza uscire dall'app.
 
-## Caratteristiche
+È la riscrittura della precedente versione .NET MAUI (ancora consultabile nella cronologia git).
 
-- **Rilevamento GPS automatico**: determina automaticamente se sei a La Maddalena o Palau
-- **Selezione manuale posizione**: possibilità di impostare manualmente il porto di partenza
-- **Visualizzazione orari**: mostra gli ultimi 3 traghetti passati (sbiaditi) e i prossimi 6 disponibili
-- **Selezione data/ora**: visualizza gli orari per qualsiasi momento selezionato
-- **Due compagnie**: Delcomar (20 min traversata) e Maddalena Lines (15 min traversata)
-- **Design moderno**: interfaccia Material Design con colori distintivi per le compagnie
+| Orari | Tema scuro | Opzioni d'acquisto | Carta |
+|---|---|---|---|
+| ![](docs/screenshots/01_home.png) | ![](docs/screenshots/04_home_scuro_inverno.png) | ![](docs/screenshots/05_acquisto_opzioni.png) | ![](docs/screenshots/07_carta_salvata.png) |
 
-## Requisiti
+## Funzioni
 
-- .NET 8.0 SDK
-- Visual Studio 2022 17.8+ con workload .NET MAUI
-- Per Android: Android SDK 21+
-- Per Windows: Windows 10 1809+
+- **Porto di partenza automatico via GPS** (porto più vicino) oppure scelta manuale / inversione tratta.
+- **Prossima partenza** in evidenza con conto alla rovescia, **ultime 3 partite** (sbiadite) e
+  **prossime 6**, con "Mostra tutte". Funziona anche a cavallo della mezzanotte.
+- **Data e ora a scelta** con calendario e orologio Material 3, pulsante "Adesso".
+- **Orari Delcomar aggiornati dal sito ufficiale** per il giorno scelto (nave inclusa), con cache
+  su disco e orario incorporato come ripiego **offline**.
+- **Orari Maddalena Lines stagionali** (servizio 1° aprile – 31 ottobre, tre fasce).
+- Filtro per compagnia, tema chiaro/scuro, orari sempre nel fuso di Roma.
+- **Acquisto del biglietto dentro l'app** sul sito della compagnia, già impostato su tratta, data,
+  passeggeri, veicolo, tariffa e corsa; **carta di pagamento** custodita cifrata sul telefono.
 
-## Compilazione
+Come funziona l'acquisto, i limiti e i risultati dei test: **[docs/REPORT.md](docs/REPORT.md)**.
+
+## Compilare
+
+Servono JDK 17+ e Android SDK (platform 35). Android minimo: 8.0 (API 26).
 
 ```bash
-dotnet restore
-dotnet build -f net8.0-android34.0
+./gradlew assembleDebug
 ```
 
-## Esecuzione
+L'APK è in `app/build/outputs/apk/debug/app-debug.apk`.
 
-### Android
+## Test
+
 ```bash
-dotnet build -t:Run -f net8.0-android34.0
+./gradlew testDebugUnitTest
 ```
 
-### Windows
 ```bash
-dotnet build -t:Run -f net8.0-windows10.0.19041.0
+./gradlew testDebugUnitTest -PliveTests=true
 ```
 
-## Permessi
+Il secondo comando include il test che scarica davvero gli orari da `booking.delcomar.it`.
+`./gradlew recordRoborazziDebug` rigenera le schermate in `docs/screenshots`.
 
-L'applicazione richiede i permessi di localizzazione per il rilevamento GPS automatico:
-- Android: ACCESS_FINE_LOCATION, ACCESS_COARSE_LOCATION
-- Windows: Location capability
+Controllo in un vero Chromium degli script che l'app inietta nei siti (richiede Node e Playwright;
+va eseguito dopo i test, che esportano gli script):
 
-## Architettura
+```bash
+node tools/web-check/check.mjs
+```
 
-Progetto basato su architettura MVVM con:
-- **Models**: Ferry, FerryLocation
-- **Services**: FerryService, LocationService
-- **ViewModels**: MainViewModel
-- **Views**: MainPage
+## Struttura
 
-## Librerie Utilizzate
+```
+app/src/main/java/it/traghetti/maddalena/
+  domain/    modelli e finestra "partiti / prossimi" (Kotlin puro)
+  data/      orari incorporati, lettura del sito Delcomar, cache, repository
+  location/  porto più vicino via LocationManager
+  purchase/  deep link di prenotazione, domini fidati, script per la WebView
+  card/      validazione carta, portafoglio cifrato (Android Keystore), biometria
+  ui/        schermate Compose: home, acquisto, carta, tema
+```
 
-- CommunityToolkit.Maui 7.0.1
-- CommunityToolkit.Mvvm 8.2.2
-- Microsoft.Maui.Controls 8.0.3
+Gli orari possono variare per meteo, scioperi o festività: fa sempre fede il sito della compagnia.
+App non ufficiale, non affiliata a Delcomar né a Caronte & Tourist.
