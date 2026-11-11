@@ -195,3 +195,21 @@ Altri punti aperti:
 - **Condizioni d'uso dei siti**: l'app legge una pagina pubblica di Delcomar per gli orari, con
   cache di 6 ore. È un uso leggero, ma per una pubblicazione sugli store conviene chiedere il
   consenso alle due compagnie (anche per l'uso dei nomi).
+
+## 6. Aggiornamento 2.0.1 (11 novembre 2026): chiusura all'avvio
+
+Alla prima prova su un telefono l'app si chiudeva subito dopo l'apertura.
+
+- **Causa**: la libreria per l'impronta digitale includeva una versione vecchia di
+  `androidx.fragment`, incompatibile con il meccanismo usato per chiedere il permesso di posizione.
+  Alla richiesta del permesso, cioè appena aperta l'app, veniva lanciata l'eccezione
+  `Can only use lower 16 bits for requestCode`.
+- **Perché i test non l'avevano vista**: provavano le singole schermate, non l'avvio dell'app vera.
+- **Correzione**: dichiarata esplicitamente una versione recente di `androidx.fragment`.
+- **Nuovi test** (`AppLaunchTest`, 3): avviano la vera `MainActivity` e verificano primo avvio con
+  richiesta del permesso, avvio con permesso già concesso, apertura della schermata carta e ritorno,
+  percorso "Acquista" fino alla schermata del sito. Senza la correzione falliscono con la stessa
+  eccezione vista sul telefono. Totale ora: **41 test, tutti superati**.
+
+Un emulatore Android non è stato usato: la macchina di lavoro non ha la virtualizzazione hardware
+che l'emulatore richiede. Restano quindi validi i punti da provare a mano del capitolo 5.
