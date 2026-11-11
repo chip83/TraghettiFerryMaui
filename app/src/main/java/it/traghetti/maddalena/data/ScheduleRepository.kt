@@ -7,7 +7,6 @@ import it.traghetti.maddalena.domain.Port
 import it.traghetti.maddalena.domain.Trip
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
-import java.io.IOException
 import java.time.LocalDate
 
 /** Partenze di più giorni con l'indicazione della provenienza del dato Delcomar. */
@@ -34,15 +33,20 @@ class ScheduleRepository(
     suspend fun load(date: LocalDate, from: Port, forceRefresh: Boolean = false): ScheduleResult = coroutineScope {
         val liveDays = listOf(date, date.plusDays(1)).map { d -> async { d to delcomarDay(d, from, forceRefresh, allowNetwork = true) } }
         val previous = date.minusDays(1) to delcomarDay(date.minusDays(1), from, false, allowNetwork = false)
-        val days = listOf(previous) + liveDays.map { it.await() }
+        merge(listOf(previous) + liveDays.map { it.await() }, from)
+    }
 
+    /** Solo orari incorporati, senza rete né cache: non può fallire. */
+    fun offline(date: LocalDate, from: Port): ScheduleResult =
+        merge((-1L..1L).map { date.plusDays(it) to Day(StaticTimetable.delcomar(from), DataSource.OFFLINE, null) }, from)
+
+    private fun merge(days: List<Pair<LocalDate, Day>>, from: Port): ScheduleResult {
         val departures = days.flatMap { (d, day) ->
             day.trips.map { it.on(d, from, live = day.source != DataSource.OFFLINE) } +
                 StaticTimetable.maddalenaLines(from, d).map { it.on(d, from, live = false) }
         }.sortedBy { it.departure }
-
         val main = days[1].second
-        ScheduleResult(departures, main.source, main.fetchedAt)
+        return ScheduleResult(departures, main.source, main.fetchedAt)
     }
 
     private data class Day(val trips: List<Trip>, val source: DataSource, val fetchedAt: Long?)
@@ -51,20 +55,32 @@ class ScheduleRepository(
         val cached = cache.get(date, from)
         val fresh = cached != null && clock() - cached.fetchedAtMillis < maxAgeMillis
         if (cached != null && (fresh && !forceRefresh || !allowNetwork)) {
-            return Day(cached.trips, if (fresh) DataSource.LIVE else DataSource.CACHE, cached.fetchedAtMillis)
+            return Day(withDeparted(cached.trips, from), if (fresh) DataSource.LIVE else DataSource.CACHE, cached.fetchedAtMillis)
         }
         if (allowNetwork) {
             try {
                 val trips = remote.fetch(date, from)
                 val now = clock()
                 cache.put(date, from, trips, now)
-                return Day(trips, DataSource.LIVE, now)
-            } catch (_: IOException) {
+                return Day(withDeparted(trips, from), DataSource.LIVE, now)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (_: Exception) {
                 // si ripiega su cache scaduta o orario incorporato
             }
         }
-        return if (cached != null) Day(cached.trips, DataSource.CACHE, cached.fetchedAtMillis)
+        return if (cached != null) Day(withDeparted(cached.trips, from), DataSource.CACHE, cached.fetchedAtMillis)
         else Day(StaticTimetable.delcomar(from), DataSource.OFFLINE, null)
+    }
+
+    /**
+     * Per il giorno in corso il sito elenca solo le corse ancora prenotabili: quelle già partite
+     * mancano. Si completano con l'orario incorporato, altrimenti "Appena partiti" mostrerebbe
+     * le ultime corse del giorno prima.
+     */
+    private fun withDeparted(live: List<Trip>, from: Port): List<Trip> {
+        val first = live.minOfOrNull { it.departure } ?: return live
+        return StaticTimetable.delcomar(from).filter { it.departure < first } + live
     }
 
     private fun Trip.on(date: LocalDate, from: Port, live: Boolean): Departure {

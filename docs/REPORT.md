@@ -213,3 +213,48 @@ Alla prima prova su un telefono l'app si chiudeva subito dopo l'apertura.
 
 Un emulatore Android non è stato usato: la macchina di lavoro non ha la virtualizzazione hardware
 che l'emulatore richiede. Restano quindi validi i punti da provare a mano del capitolo 5.
+
+## 7. Aggiornamento 2.0.2 (11 novembre 2026): prove su emulatore Android
+
+Dopo la segnalazione che l'app si chiudeva ancora sul telefono (Android 13), è stato installato
+un emulatore Android. La macchina di lavoro non ha accelerazione hardware, quindi l'emulatore gira
+in emulazione software: funziona, ma è molto lento (avvio in circa 8 minuti).
+
+**Cosa è stato provato** sull'emulatore, con Android 13 e Android 14:
+
+| Scenario | Esito |
+|---|---|
+| Primo avvio, permesso di posizione concesso | L'app parte, rileva il porto, mostra gli orari |
+| Primo avvio, permesso negato | L'app parte in modalità manuale |
+| Con rete: orari scaricati da booking.delcomar.it | Orari e nomi delle navi mostrati, cache scritta |
+| Senza rete | Orari incorporati |
+| Tema scuro, inversione tratta, schermata carta, pannello d'acquisto | Funzionano |
+| Schermata d'acquisto (sito nella WebView) | Vedi sotto |
+
+**La chiusura all'avvio segnalata sul telefono non si è riprodotta** in nessuno di questi scenari
+con la versione 2.0.1. La causa sul dispositivo reale resta quindi da accertare; per questo la
+2.0.2 aggiunge uno strumento di diagnosi.
+
+**Difetti trovati e corretti grazie all'emulatore**
+
+- *Lista "Appena partiti" sbagliata.* Per il giorno in corso il sito Delcomar elenca solo le corse
+  ancora prenotabili. L'app mostrava quindi come "appena partite" le ultime corse del giorno prima.
+  Ora le corse già partite vengono completate con l'orario incorporato.
+- *Chiusura dell'app nella schermata d'acquisto.* Se il componente web di sistema si interrompe,
+  Android chiude l'intera app a meno che questa non gestisca l'evento. Ora compare un avviso con
+  le scelte "Torna agli orari" e "Apri nel browser". Sull'emulatore il componente web si interrompe
+  sempre al caricamento del sito Delcomar: è con ogni probabilità un limite dell'emulatore senza
+  accelerazione, ma significa che **la schermata d'acquisto non è stata vista funzionare su
+  Android**, solo in Chromium desktop (capitolo 4.2).
+- *Errori imprevisti durante il caricamento degli orari.* Prima venivano gestiti solo gli errori di
+  rete; ora qualunque errore fa ripiegare sull'orario incorporato invece di chiudere l'app.
+
+**Diagnosi sul telefono**
+
+- Se l'app si chiude per un errore, il dettaglio tecnico viene salvato sul telefono. Alla riapertura
+  compare una schermata che lo mostra, con i pulsanti "Copia il dettaglio", "Condividi" e
+  "Apri l'app". Verificato sull'emulatore Android 13 con un errore provocato apposta.
+- In fondo alla schermata degli orari compare il numero di versione, per controllare quale APK è
+  realmente installato.
+
+Totale test automatici: **45, tutti superati**.

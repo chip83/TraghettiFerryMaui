@@ -8,6 +8,8 @@ import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.hasTestTag
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Rule
@@ -46,6 +48,36 @@ class AppLaunchTest {
         compose.onNodeWithText("La mia carta").assertIsDisplayed()
         compose.activityRule.scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
         compose.onNodeWithTag("hero").assertIsDisplayed()
+    }
+
+    @Test fun `version is shown in the footer`() {
+        compose.onNodeWithTag("home_list").performScrollToNode(hasTestTag("version"))
+        compose.onNodeWithText("Versione 2.", substring = true, useUnmergedTree = true).assertIsDisplayed()
+    }
+
+    @Test fun `crash is saved and shown at next launch instead of crashing again`() {
+        val app = ApplicationProvider.getApplicationContext<Application>()
+        // simula la chiusura per errore: il gestore installato da FerryApp deve scrivere il file
+        val handler = Thread.getDefaultUncaughtExceptionHandler()!!
+        Thread.setDefaultUncaughtExceptionHandler(null)                     // niente "previous" che termini la JVM di test
+        CrashReporter.install(app)
+        Thread.getDefaultUncaughtExceptionHandler()!!.uncaughtException(Thread.currentThread(), IllegalStateException("boom di prova"))
+        Thread.setDefaultUncaughtExceptionHandler(handler)
+        val report = CrashReporter.read(app)!!
+        check("boom di prova" in report && "IllegalStateException" in report && "Android" in report && "Traghetti La Maddalena 2." in report) { report }
+
+        compose.activityRule.scenario.close()
+        androidx.test.core.app.ActivityScenario.launch(MainActivity::class.java)
+        val next = shadowOf(app).nextStartedActivity
+        check(next?.component?.className == CrashReportActivity::class.java.name) { "atteso CrashReportActivity, avviato $next" }
+        androidx.test.core.app.ActivityScenario.launch(CrashReportActivity::class.java).onActivity { a ->
+            val texts = mutableListOf<String>()
+            fun walk(v: android.view.View) { if (v is android.widget.TextView) texts += v.text.toString(); if (v is android.view.ViewGroup) for (i in 0 until v.childCount) walk(v.getChildAt(i)) }
+            walk(a.findViewById(android.R.id.content))
+            check(texts.any { "boom di prova" in it } && "Apri l'app" in texts) { texts.toString() }
+        }
+        CrashReporter.clear(app)
+        check(CrashReporter.read(app) == null)
     }
 
     @Test fun `buy flow opens the purchase screen on the official site`() {

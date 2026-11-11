@@ -98,8 +98,8 @@ class DataTest {
         val r = repo.load(day, Port.PALAU)
         assertEquals(DataSource.LIVE, r.delcomarSource)
         assertEquals(setOf(day, day.plusDays(1)), source.calls.toSet())     // il giorno prima non usa la rete
-        // giorno precedente (statico) + 2 giorni live da 1 corsa
-        assertEquals(34 + 2, r.departures.size)
+        // giorno precedente (statico) + 2 giorni: la corsa live delle 9:05 più le 11 già partite prima
+        assertEquals(34 + 2 * (11 + 1), r.departures.size)
         assertTrue(r.departures.first { it.departure == day.atTime(9, 5) }.live)
         assertFalse(r.departures.first().live)
         assertEquals(r.departures.sortedBy { it.departure }, r.departures)
@@ -125,6 +125,29 @@ class DataTest {
         assertEquals(DataSource.OFFLINE, other.delcomarSource)
         assertEquals(34 * 3, other.departures.size)
         assertTrue(other.departures.none { it.live })
+    }
+
+    @Test fun `today's live list is completed with already departed ferries`() = runTest {
+        // alle 18:40 il sito elenca solo le corse dalle 19:00 in poi
+        val evening = DelcomarSource { _, _ -> listOf("19:00", "19:30", "20:30").map { Trip(Company.DELCOMAR, LocalTime.parse(it), 15, "S. Stefano") } }
+        val r = ScheduleRepository(evening, TripCache(tmp.root)).load(day, Port.LA_MADDALENA)
+        val today = r.departures.filter { it.departure.toLocalDate() == day }.map { it.departure.toLocalTime().toString() }
+        assertEquals(listOf("17:30", "18:00", "18:30", "19:00", "19:30", "20:30"), today.takeLast(6))
+        assertEquals(today.distinct(), today)
+        val w = it.traghetti.maddalena.domain.ScheduleWindows.build(r.departures, day.atTime(18, 40))
+        assertEquals(listOf("17:30", "18:00", "18:30"), w.past.map { it.departure.toLocalTime().toString() })
+        assertEquals(day, w.past.first().departure.toLocalDate())                 // di oggi, non di ieri
+        // stessa cosa rileggendo dalla cache
+        val again = ScheduleRepository({ _, _ -> throw IOException("offline") }, TripCache(tmp.root), maxAgeMillis = -1).load(day, Port.LA_MADDALENA)
+        assertEquals(DataSource.CACHE, again.delcomarSource)
+        assertEquals(r.departures.map { it.departure }, again.departures.map { it.departure })
+    }
+
+    @Test fun `unexpected errors from the site never escape the repository`() = runTest {
+        val broken = DelcomarSource { _, _ -> throw IllegalStateException("pagina cambiata") }
+        val repo = ScheduleRepository(broken, TripCache(tmp.root))
+        assertEquals(DataSource.OFFLINE, repo.load(day, Port.PALAU).delcomarSource)
+        assertEquals(34 * 3, repo.offline(day, Port.PALAU).departures.size)
     }
 
     @Test fun `summer day merges both companies`() = runTest {

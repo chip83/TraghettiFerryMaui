@@ -13,8 +13,8 @@ android {
         applicationId = "it.traghetti.maddalena"
         minSdk = 26   // java.time nativo (Android 8.0+)
         targetSdk = 35
-        versionCode = 3
-        versionName = "2.0.1"
+        versionCode = 4
+        versionName = "2.0.2"
     }
 
     buildTypes {

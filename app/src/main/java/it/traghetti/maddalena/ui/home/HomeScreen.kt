@@ -108,7 +108,9 @@ fun HomeScreen(
     }
     fun locateOrAsk() {
         if (locator.hasPermission()) viewModel.locate()
-        else permissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+        else runCatching {
+            permissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+        }.onFailure { viewModel.onLocationDenied() }   // la posizione è un di più: mai far cadere l'app
     }
     LaunchedEffect(Unit) { if (state.autoLocation) locateOrAsk() }
     // Al ritorno in primo piano si riallinea subito l'orologio.
@@ -526,6 +528,12 @@ private fun Footer(state: HomeUiState) {
         Text(
             "Gli orari possono variare per meteo, scioperi o festività: verifica sempre sul sito della compagnia.",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        val context = androidx.compose.ui.platform.LocalContext.current
+        Text(
+            "Versione ${remember { it.traghetti.maddalena.CrashReporter.versionName(context) }}",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.testTag("version"),
         )
     }
 }

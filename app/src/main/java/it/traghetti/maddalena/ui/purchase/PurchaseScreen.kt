@@ -100,6 +100,7 @@ fun PurchaseScreen(request: BookingRequest, vault: CardVault, onClose: () -> Uni
     var card by remember { mutableStateOf<PaymentCard?>(null) }
     var departureSelected by remember { mutableStateOf(false) }
     var webView by remember { mutableStateOf<WebView?>(null) }
+    var rendererGone by remember { mutableStateOf(false) }
 
     fun say(message: String) { scope.launch { snackbar.currentSnackbarData?.dismiss(); snackbar.showSnackbar(message) } }
 
@@ -202,7 +203,23 @@ fun PurchaseScreen(request: BookingRequest, vault: CardVault, onClose: () -> Uni
                         }
                     },
                     onBlocked = { say("Collegamento non sicuro bloccato") },
+                    onRendererGone = { rendererGone = true },
                 ).also { webView = it; it.loadUrl(startUrl) }
+            },
+        )
+    }
+
+    if (rendererGone) {
+        AlertDialog(
+            onDismissRequest = {},
+            title = { Text("La pagina si è interrotta") },
+            text = { Text("Il browser interno ha smesso di funzionare. Puoi riprovare oppure completare l'acquisto nel browser del telefono.") },
+            confirmButton = { TextButton(onClick = { rendererGone = false; onClose() }) { Text("Torna agli orari") } },
+            dismissButton = {
+                TextButton(onClick = {
+                    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(startUrl))) }
+                    rendererGone = false; onClose()
+                }) { Text("Apri nel browser") }
             },
         )
     }
@@ -265,6 +282,7 @@ private fun createWebView(
     onProgress: (Int) -> Unit,
     onPageFinished: (WebView, String) -> Unit,
     onBlocked: () -> Unit,
+    onRendererGone: () -> Unit,
 ): WebView = WebView(context).apply {
     settings.apply {
         javaScriptEnabled = true           // i due siti sono applicazioni JS
@@ -296,6 +314,12 @@ private fun createWebView(
         override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) = onUrl(url)
         override fun doUpdateVisitedHistory(view: WebView, url: String, isReload: Boolean) = onUrl(url)
         override fun onPageFinished(view: WebView, url: String) { onUrl(url); onPageFinished(view, url) }
+        // Se il processo che disegna la pagina muore (memoria esaurita, bug del WebView di sistema),
+        // senza questo metodo Android chiude l'intera app.
+        override fun onRenderProcessGone(view: WebView, detail: android.webkit.RenderProcessGoneDetail): Boolean {
+            onRendererGone()
+            return true
+        }
         // onReceivedSslError non è ridefinito: con certificato non valido il caricamento viene annullato.
     }
 }

@@ -1,5 +1,6 @@
 package it.traghetti.maddalena
 
+import android.content.Intent
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.compose.BackHandler
@@ -33,6 +34,14 @@ class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        // Se l'avvio precedente è finito con un errore, lo si mostra invece di riprovare alla cieca.
+        if (savedInstanceState == null && CrashReporter.read(this) != null) {
+            startActivity(Intent(this, CrashReportActivity::class.java))
+            finish()
+            return
+        }
+        // Solo per i test su emulatore: `am start ... --ez crash_test true`
+        if (intent?.getBooleanExtra("crash_test", false) == true) error("Errore di prova richiesto con crash_test")
         val app = application as FerryApp
         setContent {
             TraghettiTheme {

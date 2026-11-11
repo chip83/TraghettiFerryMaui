@@ -171,7 +171,14 @@ class HomeViewModel(
         loadJob?.cancel()
         loadJob = viewModelScope.launch {
             _state.update { it.copy(loading = true) }
-            val result = repository.load(key.first, key.second, force)
+            val result = try {
+                repository.load(key.first, key.second, force)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // qualunque imprevisto (rete, formato della pagina, disco): si mostra l'orario incorporato
+                repository.offline(key.first, key.second)
+            }
             departures = result.departures
             loadedKey = key
             _state.update { it.copy(loading = false, source = result.delcomarSource, fetchedAt = result.delcomarFetchedAt) }
